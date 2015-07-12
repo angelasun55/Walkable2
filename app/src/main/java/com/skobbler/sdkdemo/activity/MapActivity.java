@@ -19,6 +19,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -429,8 +430,26 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
 
     private ListView listView;
 
+    enum PointType {
+        POLICE, SUSPICIOUS_PERSON, NO_LIGHTING, BUSY_AREA;
 
+        public int getDrawable() {
+            return R.drawable.icon_map_popup_navigate;
+        }
+    }
 
+    public void addPoint(PointType type, double lat, double lon) {
+        SKAnnotation a = new SKAnnotation();
+        a.setLocation(new SKCoordinate(lat, lon));
+        a.setMininumZoomLevel(5);
+        a.setAnnotationType(SKAnnotation.SK_ANNOTATION_TYPE_RED);
+        SKAnnotationView annotationView = new SKAnnotationView();
+        annotationView.setDrawableResourceId(type.getDrawable());
+        annotationView.setWidth(128);
+        annotationView.setHeight(128);
+        a.setAnnotationView(annotationView);
+        mapView.addAnnotation(a, SKAnimationSettings.ANIMATION_NONE);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -760,6 +779,11 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
         if (currentMapOption == MapOption.MAP_INTERACTION && isRouteCached()) {
             loadRouteFromCache();
         }
+    }
+
+
+    private void initPoints() {
+        mapView.addCustomPOI(new SKMapCustomPOI());
     }
 
     @Override
