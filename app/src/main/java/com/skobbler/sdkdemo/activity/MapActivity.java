@@ -820,6 +820,8 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
             showUpdateDialog(SplashActivity.newMapVersionDetected);
         }
 
+        addPoint(PointType.BUSY_AREA, 37.7830773,-122.4027036);
+
         if (!navigationInProgress) {
             mapView.getMapSettings().setFollowerMode(SKMapFollowerMode.NONE);
         }
