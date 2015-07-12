@@ -19,6 +19,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -467,7 +468,26 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
 
     private static final LatLngBounds BOUNDS_JAMAICA= new LatLngBounds(new LatLng(-57.965341647205726, 144.9987719580531),
             new LatLng(72.77492067739843, -9.998857788741589));
+    enum PointType {
+        POLICE, SUSPICIOUS_PERSON, NO_LIGHTING, BUSY_AREA;
 
+        public int getDrawable() {
+            return R.drawable.icon_map_popup_navigate;
+        }
+    }
+
+    public void addPoint(PointType type, double lat, double lon) {
+        SKAnnotation a = new SKAnnotation(14);
+        a.setLocation(new SKCoordinate(lat, lon));
+        a.setMininumZoomLevel(5);
+        a.setAnnotationType(SKAnnotation.SK_ANNOTATION_TYPE_RED);
+        SKAnnotationView annotationView = new SKAnnotationView();
+        annotationView.setDrawableResourceId(type.getDrawable());
+        annotationView.setWidth(128);
+        annotationView.setHeight(128);
+        a.setAnnotationView(annotationView);
+        mapView.addAnnotation(a, SKAnimationSettings.ANIMATION_NONE);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -789,6 +809,8 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
     public void ReportSomething(View view) {
         TextView title = (TextView) findViewById(R.id.locationtitle);
         title.setVisibility(View.VISIBLE);
+        LinearLayout navigationsection = (LinearLayout) findViewById(R.id.navigationsection);
+        navigationsection.setVisibility(View.GONE);
     }
 
 
@@ -931,6 +953,11 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
         }
     }
 
+
+    private void initPoints() {
+        mapView.addCustomPOI(new SKMapCustomPOI());
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
@@ -964,6 +991,8 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
         if(SplashActivity.newMapVersionDetected != 0){
             showUpdateDialog(SplashActivity.newMapVersionDetected);
         }
+
+        addPoint(PointType.BUSY_AREA, 37.7830773,-122.4027036);
 
         if (!navigationInProgress) {
             mapView.getMapSettings().setFollowerMode(SKMapFollowerMode.NONE);
