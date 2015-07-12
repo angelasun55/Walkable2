@@ -23,6 +23,8 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.Location;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -31,6 +33,8 @@ import android.speech.tts.TextToSpeech;
 import android.support.v4.app.ActionBarDrawerToggle;
 import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
@@ -41,6 +45,7 @@ import android.view.View;
 
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.ImageButton;
@@ -55,6 +60,15 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.PendingResult;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.location.places.Place;
+import com.google.android.gms.location.places.PlaceBuffer;
+import com.google.android.gms.location.places.Places;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.skobbler.ngx.SKCategories.SKPOICategory;
 import com.skobbler.ngx.SKCoordinate;
 import com.skobbler.ngx.SKMaps;
@@ -126,19 +140,24 @@ import com.skobbler.sdkdemo.util.PreferenceTypes;
 
 public class MapActivity extends Activity implements SKMapSurfaceListener, SKRouteListener, SKNavigationListener,
         SKRealReachListener, SKPOITrackerListener, SKCurrentPositionListener, SensorEventListener,
-        SKMapUpdateListener, SKToolsNavigationListener {
+        SKMapUpdateListener, SKToolsNavigationListener, GoogleApiClient.OnConnectionFailedListener, GoogleApiClient.ConnectionCallbacks  {
 
     private static final byte GREEN_PIN_ICON_ID = 0;
 
     private static final byte RED_PIN_ICON_ID = 1;
 
-    public static final byte VIA_POINT_ICON_ID = 4;
+    public static final byte VIA_POINT_ICON_ID = 4;    private String LOG_TAG = "MyActivity";
+
 
     private static final String TAG = "MapActivity";
 
     public static final int TRACKS = 1;
 
     public ToggleButton toggleButton;
+    public AutoCompleteTextView starting;
+    public AutoCompleteTextView destination;
+    protected LatLng start;
+    protected LatLng end;
 
     public static boolean roundTrip;
 
@@ -173,6 +192,20 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
         TEXT_TO_SPEECH, AUDIO_FILES
     }
 
+    @Override
+    public void onConnected(Bundle bundle) {
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+
+    }
+
+    @Override
+    public void onConnectionFailed(ConnectionResult connectionResult) {
+
+        Log.v("hello",connectionResult.toString());
+    }
     /**
      * The cunsumption values
      */
@@ -428,8 +461,12 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
     private Integer cachedRouteId;
 
     private ListView listView;
+    private PlaceAutoCompleteAdapter mAdapter;
 
+    protected GoogleApiClient mGoogleApiClient;
 
+    private static final LatLngBounds BOUNDS_JAMAICA= new LatLngBounds(new LatLng(-57.965341647205726, 144.9987719580531),
+            new LatLng(72.77492067739843, -9.998857788741589));
 
 
     @Override
@@ -468,6 +505,8 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
         bikeButton = (ImageButton) findViewById(R.id.real_reach_bike_button);
         carButton = (ImageButton) findViewById(R.id.real_reach_car_button);
 
+        starting = (AutoCompleteTextView) findViewById(R.id.start);
+        destination = (AutoCompleteTextView) findViewById(R.id.destination);
         SKVersioningManager.getInstance().setMapUpdateListener(this);
 
         toggleButton= (ToggleButton) findViewById(R.id.real_reach_round_trip);
@@ -579,15 +618,15 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
                 if (unit.equals(getString(R.string.real_reach_online)) || unit.equals(getString(R.string.real_reach_offline))) {
                     if (unit.equals(getString(R.string.real_reach_online))) {
                         skRouteConnectionMode = SKRouteSettings.SKRouteConnectionMode.ONLINE;
-                        showRealReach(realReachUnitType, realReachVehicleType, realReachRange,skRouteConnectionMode);
+                        showRealReach(realReachUnitType, realReachVehicleType, realReachRange, skRouteConnectionMode);
                     } else if (unit.equals(getString(R.string.real_reach_offline))) {
-                        skRouteConnectionMode= SKRouteSettings.SKRouteConnectionMode.OFFLINE;
-                        showRealReach(realReachUnitType, realReachVehicleType, realReachRange,skRouteConnectionMode);
+                        skRouteConnectionMode = SKRouteSettings.SKRouteConnectionMode.OFFLINE;
+                        showRealReach(realReachUnitType, realReachVehicleType, realReachRange, skRouteConnectionMode);
                     }
 
                 } else {
-                    skRouteConnectionMode= SKRouteSettings.SKRouteConnectionMode.HYBRID;
-                    showRealReach(realReachUnitType, realReachVehicleType, realReachRange,skRouteConnectionMode);
+                    skRouteConnectionMode = SKRouteSettings.SKRouteConnectionMode.HYBRID;
+                    showRealReach(realReachUnitType, realReachVehicleType, realReachRange, skRouteConnectionMode);
                 }
 
             }
@@ -599,7 +638,7 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
                 realReachSeekBar.setMax(60);
                 realReachSeekBar.setProgress(10);
                 findViewById(R.id.real_reach_vehicle_layout).setVisibility(View.VISIBLE);
-                showRealReach(realReachUnitType, realReachVehicleType, realReachRange,skRouteConnectionMode);
+                showRealReach(realReachUnitType, realReachVehicleType, realReachRange, skRouteConnectionMode);
             }
         });
 
@@ -616,11 +655,141 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
 
 
         //initializeMenuItems();
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addApi(Places.GEO_DATA_API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+        mGoogleApiClient.connect();
+        mAdapter = new PlaceAutoCompleteAdapter(this, android.R.layout.simple_list_item_1,
+                mGoogleApiClient, BOUNDS_JAMAICA, null);
+
+        starting.setAdapter(mAdapter);
+        destination.setAdapter(mAdapter);
 
 
+        /*
+        * Sets the start and destination points based on the values selected
+        * from the autocomplete text views.
+        * */
+
+        starting.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+
+                final PlaceAutoCompleteAdapter.PlaceAutocomplete item = mAdapter.getItem(position);
+                final String placeId = String.valueOf(item.placeId);
+                Log.i(LOG_TAG, "Autocomplete item selected: " + item.description);
+
+            /*
+             Issue a request to the Places Geo Data API to retrieve a Place object with additional
+              details about the place.
+              */
+                PendingResult<PlaceBuffer> placeResult = Places.GeoDataApi
+                        .getPlaceById(mGoogleApiClient, placeId);
+                placeResult.setResultCallback(new ResultCallback<PlaceBuffer>() {
+                    @Override
+                    public void onResult(PlaceBuffer places) {
+                        if (!places.getStatus().isSuccess()) {
+                            // Request did not complete successfully
+                            Log.e(LOG_TAG, "Place query did not complete. Error: " + places.getStatus().toString());
+                            places.release();
+                            return;
+                        }
+                        // Get the Place object from the buffer.
+                        final Place place = places.get(0);
+
+                        start=place.getLatLng();
+                    }
+                });
+
+            }
+        });
+        destination.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+
+                final PlaceAutoCompleteAdapter.PlaceAutocomplete item = mAdapter.getItem(position);
+                final String placeId = String.valueOf(item.placeId);
+                Log.i(LOG_TAG, "Autocomplete item selected: " + item.description);
+
+            /*
+             Issue a request to the Places Geo Data API to retrieve a Place object with additional
+              details about the place.
+              */
+                PendingResult<PlaceBuffer> placeResult = Places.GeoDataApi
+                        .getPlaceById(mGoogleApiClient, placeId);
+                placeResult.setResultCallback(new ResultCallback<PlaceBuffer>() {
+                    @Override
+                    public void onResult(PlaceBuffer places) {
+                        if (!places.getStatus().isSuccess()) {
+                            // Request did not complete successfully
+                            Log.e(LOG_TAG, "Place query did not complete. Error: " + places.getStatus().toString());
+                            places.release();
+                            return;
+                        }
+                        // Get the Place object from the buffer.
+                        final Place place = places.get(0);
+
+                        end=place.getLatLng();
+                    }
+                });
+
+            }
+        });
+
+        /*
+        These text watchers set the start and end points to null because once there's
+        * a change after a value has been selected from the dropdown
+        * then the value has to reselected from dropdown to get
+        * the correct location.
+        * */
+        starting.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int startNum, int before, int count) {
+                if (start != null) {
+                    start = null;
+                }
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+
+            }
+        });
+
+        destination.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+
+
+                if(end!=null)
+                {
+                    end=null;
+                }
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+
+            }
+        });
      }
 
-
+    public void ReportSomething(View view) {
+        TextView title = (TextView) findViewById(R.id.locationtitle);
+        title.setVisibility(View.VISIBLE);
+    }
 
 
     public void stupidFunction(View view) {
@@ -807,6 +976,16 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
         if (currentPosition != null) {
             mapView.reportNewGPSPosition(currentPosition);
         }
+        LocationManager lm = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
+        Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        double longitude = location.getLongitude();
+        double latitude = location.getLatitude();
+
+        SKCoordinate coord = new SKCoordinate(longitude, latitude);
+        mapView.setPositionAsCurrent(coord, 0, true);
+        mapView.getMapSettings().setCurrentPositionShown(true);
+
+
     }
 
     @Override

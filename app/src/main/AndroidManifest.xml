@@ -42,7 +42,8 @@
         </activity>
         <activity
             android:name=".activity.MapActivity"
-            android:configChanges="orientation|screenSize"></activity>
+            android:theme="@android:style/Theme.Holo.NoActionBar.Fullscreen" >
+        android:configChanges="orientation|screenSize"></activity>
         <activity
             android:name=".activity.ReverseGeocodingActivity"
             android:configChanges="orientation|screenSize"></activity>
