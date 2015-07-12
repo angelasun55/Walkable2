@@ -439,7 +439,7 @@ public class MapActivity extends Activity implements SKMapSurfaceListener, SKRou
     }
 
     public void addPoint(PointType type, double lat, double lon) {
-        SKAnnotation a = new SKAnnotation();
+        SKAnnotation a = new SKAnnotation(14);
         a.setLocation(new SKCoordinate(lat, lon));
         a.setMininumZoomLevel(5);
         a.setAnnotationType(SKAnnotation.SK_ANNOTATION_TYPE_RED);
